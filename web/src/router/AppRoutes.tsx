@@ -20,6 +20,7 @@ import { CompetitionPage } from '../components/trader/CompetitionPage'
 import { AITradersPage } from '../components/trader/AITradersPage'
 import { TraderLaunchGuestPage } from '../components/trader/TraderLaunchGuestPage'
 import { FAQPage } from '../pages/FAQPage'
+import { PaperDashboardPage } from '../pages/PaperDashboardPage'
 import { LandingPage } from '../pages/LandingPage'
 import { BeginnerOnboardingPage } from '../pages/BeginnerOnboardingPage'
 import { DataPage } from '../pages/DataPage'
@@ -397,6 +398,14 @@ export function AppRoutes() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
   }, [pathname])
   const isAuthenticated = !!user && !!token
+
+  if (pathname === "/paper") {
+    return <AppChrome currentPage="trader"><PaperDashboardPage /></AppChrome>
+  }
+
+  if (import.meta.env.MODE === "paper" && pathname === "/") {
+    return <Navigate to="/paper" replace />
+  }
 
   if (isLoading || configLoading) {
     return <LoadingScreen />

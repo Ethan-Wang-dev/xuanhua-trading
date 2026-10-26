@@ -13,7 +13,15 @@ cd paper
 go run . --mode demo --interval 2s
 ```
 
-打开 http://127.0.0.1:8787 。演示使用合成行情和固定脚本，明确标记为非 AI。真实行情与模型接入、测试及限制见 [paper/README.md](paper/README.md)。该入口没有真实下单能力。
+另开终端启动 NOFX 原版前端：
+
+```bash
+cd web
+npm ci --ignore-scripts
+npm run dev:paper
+```
+
+打开 http://127.0.0.1:3000/paper 。使用原版 Dashboard 的布局和组件，模拟入口为只读。演示使用合成行情和固定脚本，明确标记为非 AI。真实行情与模型接入、测试及限制见 [paper/README.md](paper/README.md)。模拟后端没有真实下单能力。
 
 ## 开发入口
 

@@ -7,6 +7,7 @@ let configPromise: Promise<SystemConfig> | null = null
 let cachedConfig: SystemConfig | null = null
 
 export function getSystemConfig(): Promise<SystemConfig> {
+  if (import.meta.env.MODE === "paper") return Promise.resolve({ initialized: true })
   if (cachedConfig) {
     return Promise.resolve(cachedConfig)
   }

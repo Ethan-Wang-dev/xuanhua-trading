@@ -15,6 +15,11 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 3000,
     proxy: {
+      '/api/paper': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/paper/, '/api'),
+      },
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,

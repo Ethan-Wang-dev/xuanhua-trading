@@ -351,7 +351,7 @@ func TestHTTPMarketParsing(t *testing.T) {
 func TestDashboardReadOnly(t *testing.T) {
 	r, _, _ := setupRunner(t)
 	h := handler(r.Ledger)
-	for _, path := range []string{"/", "/api/state", "/health"} {
+	for _, path := range []string{"/api/state", "/health"} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != 200 {
@@ -433,5 +433,14 @@ func TestPersistedDrawdownHaltBlocksOpening(t *testing.T) {
 	r.Tick(context.Background())
 	if r.Ledger.Snapshot().Position != nil {
 		t.Fatal("runner ignored halt")
+	}
+}
+
+func TestRootRedirectsToOriginalFrontend(t *testing.T) {
+	r, _, _ := setupRunner(t)
+	w := httptest.NewRecorder()
+	handler(r.Ledger).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if w.Code != 307 || w.Header().Get("Location") != "http://127.0.0.1:3000/paper" {
+		t.Fatal("expected NOFX frontend redirect")
 	}
 }

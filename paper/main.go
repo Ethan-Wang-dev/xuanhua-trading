@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,9 +16,6 @@ import (
 	"time"
 )
 
-//go:embed dashboard.html
-var dashboard string
-
 func handler(l *Ledger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -31,8 +27,7 @@ func handler(l *Ledger) http.Handler {
 		}
 		switch r.URL.Path {
 		case "/":
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(w, dashboard)
+			http.Redirect(w, r, "http://127.0.0.1:3000/paper", http.StatusTemporaryRedirect)
 		case "/api/state":
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(l.Snapshot())

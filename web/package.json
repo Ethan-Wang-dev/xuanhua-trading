@@ -13,7 +13,9 @@
     "prepare": "husky",
     "test": "vitest run",
     "prebuild": "node scripts/prepare-charting.mjs",
-    "predev": "node scripts/prepare-charting.mjs"
+    "predev": "node scripts/prepare-charting.mjs",
+    "dev:paper": "vite --mode paper",
+    "build:paper": "tsc && vite build --mode paper"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

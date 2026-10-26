@@ -16,6 +16,9 @@ import { OrderBook } from './OrderBook'
 import { LiquidationMap } from './LiquidationMap'
 import { WinrateMatrix } from './WinrateMatrix'
 import { KlineChart } from './KlineChart'
+import { Candles } from './Candles'
+import type { Kline } from '../../lib/api/data'
+import type { PositionHistoryResponse } from '../../types'
 import { ExecutionLog } from './ExecutionLog'
 import { formatRequestError } from '../../lib/requestErrors'
 import { SignalMatrix } from './SignalMatrix'
@@ -37,6 +40,7 @@ import { FlowMarkets } from './FlowMarkets'
 import './terminal.css'
 
 interface TerminalDashboardProps {
+  paper?: { label: string; candles: Kline[]; history: PositionHistoryResponse; realizedPnL: number; drawdownPct: number; demo: boolean }
   selectedTrader?: TraderInfo
   traders?: TraderInfo[]
   selectedTraderId?: string
@@ -107,6 +111,7 @@ function useTick(ms = 1000) {
 }
 
 export function TerminalDashboard({
+  paper,
   selectedTrader,
   traders,
   selectedTraderId,
@@ -122,7 +127,7 @@ export function TerminalDashboard({
   const [closing, setClosing] = useState<string | null>(null)
 
   async function closePositionRow(symbol: string, side: 'LONG' | 'SHORT') {
-    if (!traderId || closing) return
+    if (paper || !traderId || closing) return
     const ok = await confirmToast(`Market-close ${symbol} ${side}?`, {
       title: 'Close position',
       okText: 'Close',
@@ -145,7 +150,7 @@ export function TerminalDashboard({
   }
 
   async function closeAllPositions(open: Position[]) {
-    if (!traderId || closing || open.length === 0) return
+    if (paper || !traderId || closing || open.length === 0) return
     const ok = await confirmToast(
       `Market-close ALL ${open.length} open positions?`,
       { title: 'Flatten book', okText: 'Close all', cancelText: 'Cancel' }
@@ -172,29 +177,29 @@ export function TerminalDashboard({
   }
 
   const { data: realFullStats } = useSWR(
-    traderId ? ['full-stats', traderId] : null,
+    traderId && !paper ? ['full-stats', traderId] : null,
     () => api.getFullStats(traderId!, true),
     { refreshInterval: 30000, shouldRetryOnError: false }
   )
   const { data: realHistory } = useSWR(
-    traderId ? ['pos-history', traderId] : null,
+    traderId && !paper ? ['pos-history', traderId] : null,
     () => api.getPositionHistory(traderId!, 50, true),
     { refreshInterval: 60000, shouldRetryOnError: false }
   )
   const { data: realConfig } = useSWR(
-    traderId ? ['trader-config', traderId] : null,
+    traderId && !paper ? ['trader-config', traderId] : null,
     () => api.getTraderConfig(traderId!, true),
     { refreshInterval: 120000, shouldRetryOnError: false }
   )
   const { data: realFlow } = useSWR(
-    traderId ? ['flow-markets', traderId] : null,
+    traderId && !paper ? ['flow-markets', traderId] : null,
     () => api.getFlowMarkets(selectedTrader?.ai_model, 'mainnet', '1h', 50, true),
     // paid x402 endpoint — poll slowly (5m) to conserve claw402 funds; the
     // topology beam animation is client-side and stays fast regardless
     { refreshInterval: 300000, shouldRetryOnError: false }
   )
   const { data: realSignalRank } = useSWR(
-    traderId ? ['signal-rank', traderId] : null,
+    traderId && !paper ? ['signal-rank', traderId] : null,
     () => api.getDirectionChangeLeaderboard(30, true),
     // paid x402 endpoint — poll slowly (5m) to conserve claw402 funds
     { refreshInterval: 300000, shouldRetryOnError: false }
@@ -206,6 +211,7 @@ export function TerminalDashboard({
   // When off, real data flows through unchanged.
   const [demo, setDemo] = useState(false)
   useEffect(() => {
+    if (paper) return
     const onKey = (e: KeyboardEvent) => {
       if (e.shiftKey && (e.key === 'D' || e.key === 'd')) {
         const el = document.activeElement
@@ -215,16 +221,16 @@ export function TerminalDashboard({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  const sim = useDemoEngine(demo)
-  const on = demo && !!sim
+  }, [paper])
+  const sim = useDemoEngine(demo && !paper)
+  const on = !paper && demo && !!sim
 
   const status = on ? sim!.status : propStatus
   const account = on ? sim!.account : propAccount
   const positions = on ? sim!.positions : propPositions
   const decisions = on ? sim!.decisions : propDecisions
   const fullStats = on ? sim!.fullStats : realFullStats
-  const history = on ? sim!.history : realHistory
+  const history = paper?.history ?? (on ? sim!.history : realHistory)
   const config = on ? (sim!.config as unknown as typeof realConfig) : realConfig
   const flow = on ? sim!.flow : realFlow
   const signalRank = on ? sim!.signalRank : realSignalRank
@@ -345,7 +351,7 @@ export function TerminalDashboard({
   return (
     <div className="nofx-terminal nofx-dashboard" style={{ minHeight: '100vh', padding: 0 }}>
       {/* discreet, unlabelled showcase toggle (Shift+D also works) */}
-      <button
+      {!paper && <button
         type="button"
         onClick={() => setDemo((v) => !v)}
         aria-label="toggle presentation mode"
@@ -363,7 +369,7 @@ export function TerminalDashboard({
           background: on ? 'var(--tm-up)' : 'rgba(25,36,52,0.2)',
           opacity: on ? 0.55 : 0.18,
         }}
-      />
+      />}
       {/* centered, capped content column — no border (keeps it from feeling
           embedded) but bounded so the aspect-ratio SVGs don't balloon on wide screens */}
       {navSlot &&
@@ -384,8 +390,9 @@ export function TerminalDashboard({
         )}
       <div className="nofx-dashboard-heading">
         <div><h1>Dashboard</h1><p>Performance, positions and your AI’s latest decisions.</p></div>
-        <span>Live account overview</span>
+        <span>{paper ? "Paper account · read only" : "Live account overview"}</span>
       </div>
+      {paper && <div role="status" className="tm-mono" style={{ padding: "12px 24px", background: "#fff7df", color: "#664d00", borderBottom: "1px solid #eadba8" }}>{paper.label} · 只读模拟账户</div>}
       <div className="tm-box nofx-dashboard-body" style={{ maxWidth: 1280, margin: '0 auto', border: 'none' }}>
         {!on && status?.trading_blocked && (
           <div role="alert" className="tm-mono" style={{ margin: '8px 14px 0', padding: '12px', fontSize: 12, border: '1px solid var(--tm-dn)', color: 'var(--tm-dn)', background: 'rgba(200,60,40,0.06)' }}>
@@ -436,7 +443,7 @@ export function TerminalDashboard({
           <span><span className="tm-sc">scan </span>{scanMin}m</span>
           <span><span className="tm-sc">universe </span>{candidateCoins.length}</span>
           <span><span className="tm-sc">positions </span>{positions?.length ?? 0}</span>
-          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">next cycle </span>{countdown}</span>
+          <span style={{ marginLeft: 'auto' }}><span className="tm-sc">next cycle </span>{paper?.demo ? '模拟时间推进' : countdown}</span>
         </div>
         <div className="tm-rule" />
 
@@ -449,12 +456,12 @@ export function TerminalDashboard({
             { l: 'Total P/L · incl. unrealized', v: `${fmtUsd(pnl, true)} (${fmtPct(pnlPct)})`, c: up ? 'var(--tm-up)' : 'var(--tm-dn)' },
             {
               l: 'Realized P/L · closed trades',
-              v: fullStats != null ? fmtUsd(fullStats.total_pnl, true) : '—',
-              c: fullStats != null && fullStats.total_pnl >= 0 ? 'var(--tm-up)' : 'var(--tm-dn)',
+              v: paper ? fmtUsd(paper.realizedPnL, true) : fullStats != null ? fmtUsd(fullStats.total_pnl, true) : '—',
+              c: (paper ? paper.realizedPnL >= 0 : fullStats != null && fullStats.total_pnl >= 0) ? 'var(--tm-up)' : 'var(--tm-dn)',
             },
             { l: 'Profit factor', v: fullStats != null ? fullStats.profit_factor.toFixed(2) : '—', c: 'var(--tm-ink)' },
             // max_drawdown_pct is already a percent (18.5 = -18.5%)
-            { l: 'Max drawdown', v: fullStats != null ? `-${fullStats.max_drawdown_pct.toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
+            { l: 'Max drawdown', v: paper ? `-${paper.drawdownPct.toFixed(1)}%` : fullStats != null ? `-${fullStats.max_drawdown_pct.toFixed(1)}%` : '—', c: 'var(--tm-dn)' },
           ].map((m, i) => (
             <div key={m.l} style={{ padding: '12px 14px', borderRight: i < 4 ? cellBorder : 'none' }}>
               <div className="tm-sc">{m.l}</div>
@@ -490,22 +497,22 @@ export function TerminalDashboard({
             {/* cost/liq heatmap works for both synthetic (hip3_perp) and crypto
                 (perp) markets — pass the likely marketType; the component falls
                 back to the other one if the guess is wrong */}
-            <LiquidationMap
+            {paper ? <div className="tm-sc">Liquidation map · 现货模拟不适用</div> : <LiquidationMap
               symbol={activeSym}
               demo={on}
               marketType={activeMarketType}
               height={ROW1_H - 130}
-            />
+            />}
           </div>
           <div style={{ ...sc, borderRight: cellBorder, height: ROW1_H, overflow: 'hidden' }}>
-            <OrderBook symbol={activeRequestSymbol} demo={on} markPrice={positions?.find((p) => baseLabel(p.symbol) === activeSym)?.entry_price} />
+            {paper ? <div className="tm-sc">Order book · 当前账本未记录盘口深度</div> : <OrderBook symbol={activeRequestSymbol} demo={on} markPrice={positions?.find((p) => baseLabel(p.symbol) === activeSym)?.entry_price} />}
           </div>
           <div style={{ ...sc, height: ROW1_H, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <SignalMatrix items={signalRank?.items} max={18} active={activeSym} onSelect={setSelectedSym} />
             {/* the live K-line always sits under the selector and flexes to fill */}
             <div className="tm-rule" style={{ margin: '10px 0 8px' }} />
             <div style={{ flex: 1, minHeight: 0 }}>
-              <KlineChart symbol={activeRequestSymbol} fill demo={on} />
+              {paper ? <Candles data={paper.candles} fill /> : <KlineChart symbol={activeRequestSymbol} fill demo={on} />}
             </div>
           </div>
         </div>
@@ -515,11 +522,11 @@ export function TerminalDashboard({
               Full-width panel under row 1; long/short grids side by side with
               click-to-drill address lists. ── */}
         <div style={sc}>
-          <WinrateMatrix
+          {paper ? <div className="tm-sc">Holder win-rate matrix · 未接入此数据源</div> : <WinrateMatrix
             symbol={activeSym}
             demo={on}
             marketType={activeMarketType}
-          />
+          />}
         </div>
         <div className="tm-rule" />
 
@@ -554,7 +561,9 @@ export function TerminalDashboard({
                 key: 'decision',
                 title: 'DECISION',
                 zh: 'decision',
-                items: candidateCoins.map((c) => ({ symbol: c, dir: dirFor(c) })),
+                items: paper
+                  ? (latest?.decisions ?? []).filter(d => d.success && (d.action === 'open_long' || d.action === 'open_short')).map(d => ({ symbol: d.symbol, dir: d.action === 'open_short' ? 'short' as const : 'long' as const }))
+                  : candidateCoins.map((c) => ({ symbol: c, dir: dirFor(c) })),
               },
               {
                 // executed & live: every open position is an executed order, so
@@ -588,7 +597,7 @@ export function TerminalDashboard({
             <ExecutionLog decisions={decisions} height={432} />
           </div>
           <div style={{ ...sc, borderRight: cellBorder }}>
-            <RiskRadar positions={positions} account={account} config={config} fullStats={fullStats} />
+            <RiskRadar positions={positions} account={account} config={config} fullStats={paper ? { max_drawdown_pct: paper.drawdownPct } : fullStats} />
           </div>
           <div style={sc}>
             {/* live open positions (the book right now) */}
@@ -596,7 +605,7 @@ export function TerminalDashboard({
               <span className="tm-px" style={{ fontSize: 11 }}>Positions</span>
               <span className="tm-sc">Current positions · live</span>
               <span className="tm-sc" style={{ marginLeft: 'auto' }}>{positions?.length ?? 0} open</span>
-              {traderId && !on && positions && positions.length > 0 && (
+              {traderId && !on && !paper && positions && positions.length > 0 && (
                 <button
                   type="button"
                   onClick={() => void closeAllPositions(positions)}
@@ -627,7 +636,7 @@ export function TerminalDashboard({
                     <td style={{ padding: '0 0 3px', textAlign: 'right' }}>size</td>
                     <td style={{ padding: '0 0 3px', textAlign: 'right' }}>PnL</td>
                     <td style={{ padding: '0 0 3px', textAlign: 'right' }}>return%</td>
-                    {traderId && !on && <td style={{ padding: '0 0 3px' }} />}
+                    {traderId && !on && !paper && <td style={{ padding: '0 0 3px' }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -643,7 +652,7 @@ export function TerminalDashboard({
                         <td style={{ padding: '5px 0', textAlign: 'right', color: 'var(--tm-ink-2)' }}>{fmtUsd(notional)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{fmtUsd(p.unrealized_pnl, true)}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }} className={win ? 'tm-up' : 'tm-dn'}>{(p.unrealized_pnl_pct ?? 0).toFixed(2)}%</td>
-                        {traderId && !on && (
+                        {traderId && !on && !paper && (
                           <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', width: 1 }}>
                             <button
                               type="button"
