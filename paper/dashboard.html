@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>玄化交易 · 模拟交易台</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#10161d;color:#e3e8ed}body{max-width:1100px;margin:auto;padding:32px 22px}h1{font-size:28px;margin-bottom:8px}.muted{color:#9aabbc;font-size:14px}.badge{padding:12px 16px;background:#273221;border:1px solid #768760;border-radius:8px;margin:24px 0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{padding:20px;background:#1a232d;border-radius:10px}.value{font-size:26px;margin-top:10px;font-variant-numeric:tabular-nums}section{margin-top:30px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:12px 8px;border-bottom:1px solid #303c49;text-align:left;vertical-align:top}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1a232d;padding:16px;border-radius:8px;font-size:12px}button{cursor:pointer;background:#283645;color:#e3e8ed;padding:7px;border:1px solid #455568;border-radius:5px}svg{width:100%;height:160px;background:#1a232d;border-radius:8px}#error{color:#ffb49e}.scroll{overflow-x:auto}@media(max-width:650px){.grid{grid-template-columns:1fr 1fr}body{padding:20px 12px}.value{font-size:22px}}a{color:#b6d7bc}
+</style></head><body>
+<div class="muted">XUANHUA TRADING · PAPER LAB</div><h1>玄化交易 · 模拟交易台</h1><div class="muted">行情 → Agent 判断 → 规则校验 → 虚拟成交 → 持仓与盈亏</div>
+<div id="mode" class="badge">正在连接本地账本…</div><div id="error" role="alert"></div>
+<div class="grid"><div class="card"><div class="muted">账户净值 · USD</div><div class="value" id="equity">—</div></div><div class="card"><div class="muted">可用现金 · USD</div><div class="value" id="cash">—</div></div><div class="card"><div class="muted">已实现盈亏 · USD</div><div class="value" id="pnl">—</div></div><div class="card"><div class="muted">累计手续费 · USD</div><div class="value" id="fees">—</div></div></div>
+<section><div id="status" class="muted"></div><h2>净值记录</h2><svg viewBox="0 0 1000 160" preserveAspectRatio="none" aria-label="事件时点的模拟账户净值"><polyline id="curve" fill="none" stroke="#a5cba1" stroke-width="2"/></svg><p class="muted">按账本事件排列，非等间隔行情；净值按买一价估值，尚未扣除未来退出费用。</p></section>
+<section><h2>当前持仓</h2><pre id="position">—</pre></section>
+<section><h2>决策与执行记录</h2><div class="scroll"><table><thead><tr><th>时间</th><th>状态</th><th>决定／成交</th><th>说明</th><th>依据</th></tr></thead><tbody id="events"></tbody></table></div><p class="muted">显示最近 30 条。完整提示词、模型回应和交易记录保存在本地账本。</p></section>
+<details id="detail"><summary>查看所选记录</summary><pre id="record">点击记录的“查看”。</pre></details>
+<script>
+const $=id=>document.getElementById(id), money=n=>Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+async function refresh(){try{const res=await fetch('/api/state');if(!res.ok)throw Error('无法读取账本');const s=await res.json();$('error').textContent='';
+$('mode').textContent=s.config.mode==='demo'?'离线演示 · 合成行情 + 固定脚本 · 非 AI 决策 · 全部为虚拟资金':'真实行情 + AI 决策 · 全部为模拟成交和虚拟资金 · 无实盘下单';
+for(const [id,key]of [['equity','equity_usd'],['cash','cash_usd'],['pnl','realized_pnl_usd'],['fees','fees_usd']])$(id).textContent=money(s[key]);
+const stamp=s.last_quote?new Date(s.last_quote.time).toLocaleString():'暂无';$('status').textContent=`${s.config.symbol} · 最大回撤 ${(s.max_drawdown*100).toFixed(2)}% · ${s.halted?'已暂停开仓':'模拟运行'} · 最后行情 ${stamp}`;
+$('position').textContent=s.position?JSON.stringify(s.position,null,2):'空仓';
+const vals=[s.config.initial_cash_usd,...s.events.map(e=>e.equity_usd),s.equity_usd];let lo=Math.min(...vals),hi=Math.max(...vals);if(hi===lo){hi+=1;lo-=1}$('curve').setAttribute('points',vals.map((v,i)=>`${i*1000/(vals.length-1)},${145-(v-lo)*130/(hi-lo)}`).join(' '));
+$('events').replaceChildren();for(const e of [...s.events].reverse().slice(0,30)){const tr=document.createElement('tr');for(const txt of [new Date(e.time).toLocaleString(),e.kind,e.fill?`${e.fill.action} ${e.fill.quantity.toFixed(6)} @ ${money(e.fill.price_usd)}`:(e.decision?.action||'—'),e.message]){const td=document.createElement('td');td.textContent=txt;tr.append(td)}const td=document.createElement('td'),b=document.createElement('button');b.textContent='查看';b.onclick=()=>{$('record').textContent=JSON.stringify(e,null,2);$('detail').open=true;$('detail').scrollIntoView({behavior:'smooth'})};td.append(b);tr.append(td);$('events').append(tr)}
+}catch(e){$('error').textContent='本地服务连接中断，下面可能是旧数据。'}}refresh();setInterval(refresh,3000);
+</script></body></html>
